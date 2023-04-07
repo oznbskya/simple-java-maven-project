@@ -1,0 +1,33 @@
+pipeline {
+    agent any
+    stages {
+        stage('Build') {
+            steps {
+                bat 'mvn clean package'
+            }
+        }
+        stage('Docker Build') {
+            steps {
+                bat 'docker build -t jenkins_image:1.0 .'
+            }
+        }
+        stage('Run Docker Container') {
+            environment {
+                CONTAINER_NAME = bat(returnStdout: true, script: 'echo "$(basename $PWD)-$(git log -1 --pretty=format:%h)"').trim()
+            }
+            steps {
+                // Get the ID of the current running container (if any)
+                def currentContainerId = bat(returnStdout: true, script: "docker ps -qf 'name=$CONTAINER_NAME'").trim()
+
+                // Stop and remove the current running container (if any)
+                if (currentContainerId) {
+                    bat "docker stop $currentContainerId"
+                    bat "docker rm $currentContainerId"
+                }
+
+                // Run the Docker container in detached mode
+                bat "docker run -d -p 8080:8080 --name $CONTAINER_NAME jenkins_image:1.0"
+            }
+        }
+    }
+}
